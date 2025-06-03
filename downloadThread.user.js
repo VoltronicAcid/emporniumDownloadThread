@@ -1,11 +1,12 @@
 // ==UserScript==
 // @name         Download Images
 // @description  Download all images from a forum thread on Empornium
-// @match        https://www.empornium.tld/forum/thread/*
-// @namespace    https://github.com/VoltronicAcid/
-// @homepageURL  https://github.com/VoltronicAcid/emporniumDownloadThread
 // @author       VoltronicAcid
 // @version      0.1
+// @namespace    https://github.com/VoltronicAcid/
+// @homepageURL  https://github.com/VoltronicAcid/emporniumDownloadThread
+// @downloadURL  https://github.com/VoltronicAcid/emporniumDownloadThread/raw/refs/heads/main/downloadThread.user.js
+// @match        https://www.empornium.tld/forum/thread/*
 // run-at        document-idle
 // @grant        GM.getValue
 // @grant        GM.setValue
