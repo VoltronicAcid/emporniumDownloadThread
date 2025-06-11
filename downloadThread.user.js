@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Download Images
+// @name         Empornium - Download Images
 // @description  Download all images from a forum thread on Empornium
 // @author       VoltronicAcid
-// @version      0.2
+// @version      0.3
 // @namespace    https://github.com/VoltronicAcid/
 // @homepageURL  https://github.com/VoltronicAcid/emporniumDownloadThread
 // @downloadURL  https://github.com/VoltronicAcid/emporniumDownloadThread/raw/refs/heads/main/downloadThread.user.js
@@ -17,9 +17,20 @@
 // @top-level-await
 // ==/UserScript==
 
-const ID = document.location.pathname.split("/").at(-1).split("&")[0];
-const STATE = await GM.getValue(ID, {});
-const LEN = (() => {
+const setMenu = (() => {
+    let title = "";
+
+    return (text, callback = () => { }) => {
+        if (title) GM.unregisterMenuCommand(title);
+
+        title = text;
+        GM.registerMenuCommand(title, callback);
+
+        return;
+    };
+})();
+
+const getThreadLength = () => {
     const regex = /page=(\d+)/;
     const pager = document.querySelector("div.linkbox.pager");
     const pageLinks = pager.querySelectorAll("a.pager.pager_page");
@@ -30,20 +41,17 @@ const LEN = (() => {
     if (lastPager) return parseInt(lastPager.href.match(regex)[1], 10);
 
     return parseInt(pageLinks[pageLinks.length - 1].href.match(regex)[1], 10) + 1;
-})();
+};
 
-const updateMenu = (() => {
-    const titles = ["Download Thread", "Downloading Images...", "Downloading Complete"];
-    let idx = 0;
-    const noOp = () => { };
+const getFolderName = () => {
+    const folderName = document.title
+        .match(/.*? >.*? > (.*) ::/)[1]
+        .replaceAll(/[^\w\s]/g, "")
+        .replaceAll(/[\s]+/g, "_")
+        .substring(0, 21);
 
-    return (callback) => {
-        if (idx) GM.unregisterMenuCommand(titles[idx - 1]);
-        GM.registerMenuCommand(titles[idx++], callback || noOp);
-
-        return;
-    };
-})();
+    return folderName.endsWith("_") ? folderName.slice(0, -1) : folderName;
+};
 
 const getPage = async (pageNumber) => {
     const request = { url: document.location.origin + document.location.pathname + `?page=${pageNumber}`, responseType: "document" };
@@ -52,20 +60,20 @@ const getPage = async (pageNumber) => {
     return page;
 };
 
-const getImages = async (pageNumber) => {
+const getImagesFromPage = async (pageNumber) => {
     const page = await getPage(pageNumber);
+    const folderName = getFolderName();
 
     const images = Array.from(page.querySelectorAll('.post_content > a[href*="catbox.moe"], .bbcode.scale_image'))
         .map((elem) => {
             const postId = elem.closest(".post_container").id.substring(7);
             const url = elem.tagName === "A" ? elem.href.split("?")[1] : elem.src || elem.dataset.src;
-            const folder = STATE.title.replaceAll(/[^\w\s]/g, "").replaceAll(/[\s]+/g, "_").substring(0, 21);
-            const filename = [
+            const fileName = [
                 pageNumber,
                 postId,
                 url.split("/").at(-1),
             ].join("_");
-            const name = (folder.endsWith("_") ? folder.slice(0, -1) : folder) + "/" + filename;
+            const name = `${folderName}/${fileName}`;
 
             return { url, name, pageNumber, postId, downloaded: false, attempts: 0 };
         }).filter(({ url }) => url !== "" && !url.endsWith("/"));
@@ -82,65 +90,41 @@ const downloadImages = async (images) => {
             const onloadstart = (resp) => {
                 image.attempts++
             };
-            const onload = (resp) => {
+            const onload = () => {
                 image.downloaded = true;
-                resolve(resp);
+                resolve(image);
             };
-            const ontimeout = (resp) => {
+            const ontimeout = () => {
                 image.downloaded = false;
-                reject(resp);
+                reject(image);
             };
-            const onerror = (resp) => {
+            const onerror = () => {
                 image.downloaded = false;
-                reject(resp);
+                reject(image);
             }
 
             GM.download({ url, name, timeout, ontimeout, onloadstart, onload, onerror });
         });
-    }).concat([new Promise(resolve => setTimeout(resolve("Delay"), 5 * 1000))]);   //  delay between downloading groups
+    }).concat([new Promise((resolve) => setTimeout(() => resolve("Delay"), 3 * 1000))]);   //  delay between downloading groups
 
-    return await Promise.allSettled(promises);
-};
-
-const buildState = async () => {
-    if (!("pages" in STATE)) {
-        STATE.title = document.title.match(/.*? >.*? > (.*) ::/)[1];
-        STATE.pages = JSON.parse(sessionStorage.getItem(ID))?.pages || [];
-    }
-
-    for (let pageNumber = STATE.pages.length || 1; pageNumber <= LEN; pageNumber += 1) {
-        const idx = pageNumber - 1;
-
-        while (pageNumber > STATE.pages.length) {
-            STATE.pages.push([]);
-        }
-
-        STATE.pages[idx] = STATE.pages[idx].concat((await getImages(pageNumber)).slice(STATE.pages[idx].length));
-
-        if ((await GM.getValue(ID, false))) {
-            await GM.setValue(ID, STATE);
-            await new Promise((resolve) => setTimeout(() => resolve(), 1500));
-        } else {
-            try {
-                sessionStorage.setItem(ID, JSON.stringify(STATE));
-            } catch (err) {
-                console.error(err.name);
-                console.error(err.message);
-                console.error(err);
-                sessionStorage.clear();
-                sessionStorage.setItem(ID, JSON.stringify(STATE));
-                break;
-            }
-        }
-    }
+    return Promise.allSettled(promises);
 };
 
 const downloadThread = async () => {
-    updateMenu();
+    const ID = document.location.pathname.split("/").at(-1).split("&")[0];
+    const STATE = await GM.getValue(ID, {});
+
+    if (!("images" in STATE)) {
+        STATE.title = document.title.match(/.*? >.*? > (.*) ::/)[1];
+        STATE.currPage = 1;
+        STATE.images = [];
+        STATE.failed = [];
+    }
+
     await GM.setValue(ID, STATE);
 
     const isDownloadEligible = (image) => !image.downloaded && (image.attempts < 3);
-    const chunkArr = (chunks, image, index, _, chunkLength = 3) => {
+    const arrayToChunks = (chunks, image, index, _, chunkLength = 7) => {
         if (index % chunkLength === 0) chunks.push([]);
 
         chunks[chunks.length - 1].push(image);
@@ -148,34 +132,32 @@ const downloadThread = async () => {
         return chunks;
     }
 
-    for (let idx = 0; idx < STATE.pages.length; idx += 1) {
-        if (!STATE.pages[idx].length) continue;
+    const LEN = getThreadLength();
+    while (STATE.currPage <= LEN) {
+        setMenu(`Downloading images from page #${STATE.currPage}`);
 
-        const chunks = STATE.pages[idx].filter(isDownloadEligible).reduce(chunkArr, []);
+        if (STATE.images.length === 0) STATE.images = await getImagesFromPage(STATE.currPage);
+
+        const chunks = STATE.images
+            .filter(isDownloadEligible)
+            .reduce(arrayToChunks, []);
+
         for (const chunk of chunks) {
-            await downloadImages(chunk);
+            const results = await downloadImages(chunk);
+            const failures = results.filter((res) => res.status === 'rejected').map((res) => res.reason);
+            STATE.failed = STATE.failed.concat(failures);
+            await GM.setValue(ID, STATE);
         }
 
-        STATE.pages[idx] = idx < STATE.pages.length - 1 ? STATE.pages[idx].filter(isDownloadEligible) : STATE.pages[idx];
+        if (STATE.currPage === LEN) break;
+
+        STATE.currPage += 1;
+        STATE.images = [];
         await GM.setValue(ID, STATE);
     }
 
-    updateMenu();
+    setMenu("Thread Fully Downloaded");
     return;
 };
 
-const main = async () => {
-    updateMenu(downloadThread);
-
-    Array.from(document.getElementsByClassName(`subscribelink${ID}`)).forEach((link) => {
-        link.addEventListener("click", async ({ target: { textContent } }) => {
-            if (textContent === "Subscribe") {
-                await GM.setValue(ID, STATE);
-            }
-        });
-    });
-
-    await buildState();
-};
-
-await main();
+setMenu("Download Thread", downloadThread);
