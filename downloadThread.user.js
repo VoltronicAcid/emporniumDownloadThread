@@ -2,7 +2,7 @@
 // @name         Empornium - Download Images
 // @description  Download all images from a forum thread on Empornium
 // @author       VoltronicAcid
-// @version      0.3
+// @version      0.3.1
 // @namespace    https://github.com/VoltronicAcid/
 // @homepageURL  https://github.com/VoltronicAcid/emporniumDownloadThread
 // @downloadURL  https://github.com/VoltronicAcid/emporniumDownloadThread/raw/refs/heads/main/downloadThread.user.js
@@ -16,6 +16,11 @@
 // @grant        GM.unregisterMenuCommand
 // @top-level-await
 // ==/UserScript==
+
+const BATCH_SIZE = 5;
+const BATCH_DELAY_SECONDS = 3;
+const FOLDERNAME_LENGTH = 22;
+const DOWNLOAD_TIMEOUT_SECONDS = 30;
 
 const setMenu = (() => {
     let title = "";
@@ -48,7 +53,7 @@ const getFolderName = () => {
         .match(/.*? >.*? > (.*) ::/)[1]
         .replaceAll(/[^\w\s]/g, "")
         .replaceAll(/[\s]+/g, "_")
-        .substring(0, 21);
+        .substring(0, FOLDERNAME_LENGTH);
 
     return folderName.endsWith("_") ? folderName.slice(0, -1) : folderName;
 };
@@ -84,10 +89,10 @@ const getImagesFromPage = async (pageNumber) => {
 const downloadImages = async (images) => {
     const promises = images.map((image) => {
         const { url, name } = image;
-        const timeout = 30 * 1000;
+        const timeout = DOWNLOAD_TIMEOUT_SECONDS * 1000;
 
         return new Promise((resolve, reject) => {
-            const onloadstart = (resp) => {
+            const onloadstart = () => {
                 image.attempts++
             };
             const onload = () => {
@@ -105,7 +110,7 @@ const downloadImages = async (images) => {
 
             GM.download({ url, name, timeout, ontimeout, onloadstart, onload, onerror });
         });
-    }).concat([new Promise((resolve) => setTimeout(() => resolve("Delay"), 3 * 1000))]);   //  delay between downloading groups
+    }).concat([new Promise((resolve) => setTimeout(() => resolve("Delay"), BATCH_DELAY_SECONDS * 1000))]);   //  delay between downloading batches
 
     return Promise.allSettled(promises);
 };
@@ -124,8 +129,8 @@ const downloadThread = async () => {
     await GM.setValue(ID, STATE);
 
     const isDownloadEligible = (image) => !image.downloaded && (image.attempts < 3);
-    const arrayToChunks = (chunks, image, index, _, chunkLength = 7) => {
-        if (index % chunkLength === 0) chunks.push([]);
+    const arrayToChunks = (chunks, image, index) => {
+        if (index % BATCH_SIZE === 0) chunks.push([]);
 
         chunks[chunks.length - 1].push(image);
 
@@ -136,7 +141,7 @@ const downloadThread = async () => {
     while (STATE.currPage <= LEN) {
         setMenu(`Downloading images from page #${STATE.currPage}`);
 
-        if (STATE.images.length === 0) STATE.images = await getImagesFromPage(STATE.currPage);
+        if (!STATE.images.length) STATE.images = await getImagesFromPage(STATE.currPage);
 
         const chunks = STATE.images
             .filter(isDownloadEligible)
