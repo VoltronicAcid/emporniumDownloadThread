@@ -35,6 +35,21 @@ const setMenu = (() => {
     };
 })();
 
+const getState = async (threadId) => {
+    const state = await GM.getValue(threadId, {});
+
+    if (!Object.keys(state).length) {
+        state.title = document.title.match(/.*? >.*? > (.*) ::/)[1];
+        state.currPage = 1;
+        state.failed = [];
+        state.images = [];
+
+        await GM.setValue(threadId, state);
+    }
+
+    return state;
+};
+
 const getThreadLength = () => {
     const regex = /page=(\d+)/;
     const pager = document.querySelector("div.linkbox.pager");
@@ -115,50 +130,44 @@ const downloadImages = async (images) => {
     return Promise.allSettled(promises);
 };
 
+const getImageBatches = (images) => {
+    return images
+        .filter((image) => !image.downloaded && (image.attempts < 3))
+        .reduce((batches, image, idx) => {
+            if (idx % BATCH_SIZE === 0) batches.push([]);
+
+            batches[batches.length - 1].push(image);
+
+            return batches;
+        }, []);
+};
+
 const downloadThread = async () => {
-    const ID = document.location.pathname.split("/").at(-1).split("&")[0];
-    const STATE = await GM.getValue(ID, {});
+    const threadId = document.location.pathname.split("/").at(-1).split("&")[0];
+    const state = await getState(threadId);
 
-    if (!("images" in STATE)) {
-        STATE.title = document.title.match(/.*? >.*? > (.*) ::/)[1];
-        STATE.currPage = 1;
-        STATE.images = [];
-        STATE.failed = [];
-    }
+    const threadLength = getThreadLength();
+    while (state.currPage <= threadLength) {
+        setMenu(`Downloading images from page #${state.currPage}`);
 
-    await GM.setValue(ID, STATE);
+        const images = await getImagesFromPage(state.currPage);
+        state.images = state.images.concat(images.slice(state.images.length));
+        await GM.setValue(threadId, state);
 
-    const isDownloadEligible = (image) => !image.downloaded && (image.attempts < 3);
-    const arrayToChunks = (chunks, image, index) => {
-        if (index % BATCH_SIZE === 0) chunks.push([]);
+        const downloadBatches = getImageBatches(state.images);
 
-        chunks[chunks.length - 1].push(image);
-
-        return chunks;
-    }
-
-    const LEN = getThreadLength();
-    while (STATE.currPage <= LEN) {
-        setMenu(`Downloading images from page #${STATE.currPage}`);
-
-        if (!STATE.images.length) STATE.images = await getImagesFromPage(STATE.currPage);
-
-        const chunks = STATE.images
-            .filter(isDownloadEligible)
-            .reduce(arrayToChunks, []);
-
-        for (const chunk of chunks) {
-            const results = await downloadImages(chunk);
+        for (const imageBatch of downloadBatches) {
+            const results = await downloadImages(imageBatch);
             const failures = results.filter((res) => res.status === 'rejected').map((res) => res.reason);
-            STATE.failed = STATE.failed.concat(failures);
-            await GM.setValue(ID, STATE);
+            state.failed = state.failed.concat(failures);
+            await GM.setValue(threadId, state);
         }
 
-        if (STATE.currPage === LEN) break;
+        if (state.currPage === threadLength) break;
 
-        STATE.currPage += 1;
-        STATE.images = [];
-        await GM.setValue(ID, STATE);
+        state.currPage += 1;
+        state.images = [];
+        await GM.setValue(threadId, state);
     }
 
     setMenu("Thread Fully Downloaded");
