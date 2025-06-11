@@ -14,7 +14,6 @@
 // @grant        GM.xmlHttpRequest
 // @grant        GM.registerMenuCommand
 // @grant        GM.unregisterMenuCommand
-// @top-level-await
 // ==/UserScript==
 
 const BATCH_SIZE = 5;
