@@ -6,14 +6,14 @@
 // @namespace    https://github.com/VoltronicAcid/
 // @homepageURL  https://github.com/VoltronicAcid/emporniumDownloadThread
 // @downloadURL  https://github.com/VoltronicAcid/emporniumDownloadThread/raw/refs/heads/main/downloadThread.user.js
-// @match        https://www.empornium.tld/forum/thread/*
+// @match        https://www.empornium.is/forum/thread/*
 // @run-at       document-idle
 // @grant        GM.getValue
 // @grant        GM.setValue
 // @grant        GM.download
 // @grant        GM.xmlHttpRequest
-// @grant        GM.registerMenuCommand
-// @grant        GM.unregisterMenuCommand
+// @grant        GM_registerMenuCommand
+// @grant        GM_unregisterMenuCommand
 // ==/UserScript==
 
 const BATCH_SIZE = 5;
@@ -22,13 +22,12 @@ const FOLDERNAME_LENGTH = 22;
 const DOWNLOAD_TIMEOUT_SECONDS = 30;
 
 const setMenu = (() => {
-    let title = "";
+    let id;
 
-    return (text, callback = () => { }) => {
-        if (title) GM.unregisterMenuCommand(title);
+    return (title, callback = () => { }) => {
+        if (id) GM_unregisterMenuCommand(id);
 
-        title = text;
-        GM.registerMenuCommand(title, callback);
+        id = GM_registerMenuCommand(title, callback);
 
         return;
     };
