@@ -105,9 +105,6 @@ const downloadImages = async (images) => {
         const timeout = DOWNLOAD_TIMEOUT_SECONDS * 1000;
 
         return new Promise((resolve, reject) => {
-            const onloadstart = () => {
-                image.attempts++
-            };
             const onload = () => {
                 image.downloaded = true;
                 resolve(image);
@@ -121,7 +118,8 @@ const downloadImages = async (images) => {
                 reject(image);
             }
 
-            GM.download({ url, name, timeout, ontimeout, onloadstart, onload, onerror });
+            image.attempts++;
+            GM.download({ url, name, timeout, ontimeout, onload, onerror });
         });
     }).concat([new Promise((resolve) => setTimeout(() => resolve("Delay"), BATCH_DELAY_SECONDS * 1000))]);   //  delay between downloading batches
 
