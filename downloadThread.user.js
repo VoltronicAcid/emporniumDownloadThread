@@ -126,11 +126,11 @@ const downloadImages = async (images) => {
     return Promise.allSettled(promises);
 };
 
-const getImageBatches = (images) => {
+const getImageBatches = (images, batchSize) => {
     return images
         .filter((image) => !image.downloaded && (image.attempts < 3))
         .reduce((batches, image, idx) => {
-            if (idx % BATCH_SIZE === 0) batches.push([]);
+            if (idx % batchSize === 0) batches.push([]);
 
             batches[batches.length - 1].push(image);
 
@@ -150,7 +150,7 @@ const downloadThread = async () => {
         state.images = state.images.concat(images.slice(state.images.length));
         await GM.setValue(threadId, state);
 
-        const downloadBatches = getImageBatches(state.images);
+        const downloadBatches = getImageBatches(state.images, BATCH_SIZE);
 
         for (const imageBatch of downloadBatches) {
             const results = await downloadImages(imageBatch);
