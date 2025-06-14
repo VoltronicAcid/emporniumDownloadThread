@@ -16,10 +16,11 @@
 // @grant        GM_unregisterMenuCommand
 // ==/UserScript==
 
-const BATCH_SIZE = 5;
-const BATCH_DELAY_SECONDS = 3;
+const BATCH_SIZE = 3;
+const BATCH_DELAY_SECONDS = 2;
 const FOLDERNAME_LENGTH = 22;
-const DOWNLOAD_TIMEOUT_SECONDS = 30;
+const DOWNLOAD_TIMEOUT = 30;
+const MAX_RETRY_ATTEMPTS = 5;
 
 const setMenu = (() => {
     let id;
@@ -102,7 +103,7 @@ const getImagesFromPage = async (pageNumber) => {
 const downloadImages = async (images) => {
     const promises = images.map((image) => {
         const { url, name } = image;
-        const timeout = DOWNLOAD_TIMEOUT_SECONDS * 1000;
+        const timeout = DOWNLOAD_TIMEOUT * 1000;
 
         return new Promise((resolve, reject) => {
             const onload = () => {
@@ -126,9 +127,11 @@ const downloadImages = async (images) => {
     return Promise.allSettled(promises);
 };
 
+const downloadCriteria = (image) => !image.downloaded && (image.attempts < MAX_RETRY_ATTEMPTS);
+
 const getImageBatches = (images, batchSize) => {
     return images
-        .filter((image) => !image.downloaded && (image.attempts < 3))
+        .filter(downloadCriteria)
         .reduce((batches, image, idx) => {
             if (idx % batchSize === 0) batches.push([]);
 
@@ -136,6 +139,21 @@ const getImageBatches = (images, batchSize) => {
 
             return batches;
         }, []);
+};
+
+const retryFailures = async (threadId) => {
+    const state = await getState(threadId);
+    const downloadBatches = getImageBatches(state.failed, BATCH_SIZE);
+
+    for (const imageBatch of downloadBatches) {
+        await downloadImages(imageBatch);
+        await GM.setValue(threadId, state);
+    }
+
+    state.failed = state.failed.filter(downloadCriteria);
+    await GM.setValue(threadId, state);
+
+    return;
 };
 
 const downloadThread = async () => {
@@ -166,7 +184,10 @@ const downloadThread = async () => {
         await GM.setValue(threadId, state);
     }
 
+    if (state.failed.length) await retryFailures(threadId);
+
     setMenu("Thread Fully Downloaded");
+
     return;
 };
 
