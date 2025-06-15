@@ -141,8 +141,7 @@ const getImageBatches = (images, batchSize) => {
         }, []);
 };
 
-const retryFailures = async (threadId) => {
-    const state = await getState(threadId);
+const retryFailures = async (threadId, state) => {
     const downloadBatches = getImageBatches(state.failed, BATCH_SIZE);
 
     for (const imageBatch of downloadBatches) {
@@ -159,6 +158,8 @@ const retryFailures = async (threadId) => {
 const downloadThread = async () => {
     const threadId = document.location.pathname.split("/").at(-1).split("&")[0];
     const state = await getState(threadId);
+
+    if (state.failed.length) await retryFailures(threadId, state);
 
     const threadLength = getThreadLength();
     while (state.currPage <= threadLength) {
@@ -183,8 +184,6 @@ const downloadThread = async () => {
         state.images = [];
         await GM.setValue(threadId, state);
     }
-
-    if (state.failed.length) await retryFailures(threadId);
 
     setMenu("Thread Fully Downloaded");
 
