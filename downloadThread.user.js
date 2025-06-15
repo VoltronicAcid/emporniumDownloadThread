@@ -142,6 +142,10 @@ const getImageBatches = (images, batchSize) => {
 };
 
 const retryFailures = async (threadId, state) => {
+    // Remove images from failed that will be downloaded in the normal flow
+    const currImageUrls = new Set(state.images.filter((image) => !image.downloaded).map((image) => image.url));
+    state.failed = state.failed.filter((image) => !currImageUrls.has(image.url));
+
     const downloadBatches = getImageBatches(state.failed, BATCH_SIZE);
 
     for (const imageBatch of downloadBatches) {
