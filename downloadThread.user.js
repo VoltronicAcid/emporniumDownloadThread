@@ -50,16 +50,15 @@ const getState = async (threadId) => {
 };
 
 const getThreadLength = () => {
-    const regex = /page=(\d+)/;
-    const pager = document.querySelector("div.linkbox.pager");
-    const pageLinks = pager.querySelectorAll("a.pager.pager_page");
-    const lastPager = pager.querySelector("a.pager.pager_last");
+    const pagerLinks = Array.from(document.querySelectorAll("a.pager"))
+    if (!pagerLinks.length) return 1;
 
-    if (pageLinks.length === 0) return 1;
+    const lastLink = pagerLinks.at(-1);
+    const pageNum = parseInt(lastLink.href.match(/page=(\d+)/)[1], 10);
 
-    if (lastPager) return parseInt(lastPager.href.match(regex)[1], 10);
-
-    return parseInt(pageLinks[pageLinks.length - 1].href.match(regex)[1], 10) + 1;
+    return lastLink.classList.contains("pager_last")
+        ? pageNum
+        : pageNum + 1;
 };
 
 const getFolderName = () => {
