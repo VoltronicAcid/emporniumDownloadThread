@@ -2,10 +2,8 @@
 // @name         Empornium - Download Images
 // @description  Download all images from a forum thread on Empornium
 // @author       VoltronicAcid
-// @version      0.3.2
-// @namespace    https://github.com/VoltronicAcid/
+// @version      0.3.3
 // @homepageURL  https://github.com/VoltronicAcid/emporniumDownloadThread
-// @downloadURL  https://github.com/VoltronicAcid/emporniumDownloadThread/raw/refs/heads/main/downloadThread.user.js
 // @match        https://www.empornium.is/forum/thread/*
 // @run-at       document-idle
 // @grant        GM.getValue
